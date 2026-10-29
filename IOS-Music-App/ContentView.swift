@@ -15,6 +15,7 @@ struct ContentView: View {
         .task {
             do {
                 try SampleLibrary.seedIfEmpty(in: modelContext)
+                print("Bundle ID:", Bundle.main.bundleIdentifier ?? "Missing")
             } catch {
                 print("Failed to create sample library: \(error)")
             }
