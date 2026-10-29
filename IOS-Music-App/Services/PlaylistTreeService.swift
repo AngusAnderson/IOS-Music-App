@@ -1,7 +1,14 @@
-//
-//  PlaylistTreeService.swift
-//  IOS-Music-App
-//
-//  Created by Angus Anderson on 29/10/2026.
-//
+import Foundation
+import SwiftData
 
+enum PlaylistTreeService {
+    static func collectTracks(from node: PlaylistNode) -> [PlaylistTrack] {
+        var result = node.sortedTracks
+        
+        for child in node.sortedChildren {
+            result.append(contentsOf: collectTracks(from: child))
+        }
+        
+        return result
+    }
+}
