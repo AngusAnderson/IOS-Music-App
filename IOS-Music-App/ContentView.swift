@@ -1,17 +1,25 @@
 import SwiftUI
-import Playgrounds
+import MusicKit
+import SwiftData
 
 struct ContentView: View {
+    
+    @State private var status: MusicAuthorization.Status = MusicAuthorization.currentStatus
+    
+    @Environment(\.modelContext) private var modelContext
+    
     var body: some View {
-        Text("Hello, world!")
-            .padding()
+        VStack {
+            LibraryView()
+        }
+        .task {
+            do {
+                try SampleLibrary.seedIfEmpty(in: modelContext)
+            } catch {
+                print("Failed to create sample library: \(error)")
+            }
+            
+            status = await MusicAuthorization.request()
+        }
     }
-}
-
-#Preview {
-    ContentView()
-}
-
-#Playground {
-    _ = 1 + 2
 }
