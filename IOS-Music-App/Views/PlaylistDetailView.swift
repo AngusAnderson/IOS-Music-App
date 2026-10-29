@@ -4,9 +4,11 @@ struct PlaylistDetailView: View {
     
     let node: PlaylistNode
     
+    @State private var showPlaylistEditorSheet = false
+    
     var body: some View {
+        
         List {
-            
             Button("Preview Queue") {
                 let tracks = PlaylistTreeService.collectTracks(from: node)
                 
@@ -45,5 +47,20 @@ struct PlaylistDetailView: View {
             
         }
         .navigationTitle(node.name)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showPlaylistEditorSheet = true
+                } label: {
+                    Label("New Playlist", systemImage: "plus")
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .tint(.blue)
+            }
+        }
+        .sheet(isPresented: $showPlaylistEditorSheet) {
+            PlaylistEditorSheet(parent: node)
+        }
     }
 }
