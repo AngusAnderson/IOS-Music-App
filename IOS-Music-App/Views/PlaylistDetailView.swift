@@ -5,6 +5,7 @@ struct PlaylistDetailView: View {
     let node: PlaylistNode
     
     @State private var showPlaylistEditorSheet = false
+    @State private var showingRenameSheet = false
     
     var body: some View {
         
@@ -54,13 +55,25 @@ struct PlaylistDetailView: View {
                 } label: {
                     Label("New Playlist", systemImage: "plus")
                 }
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
-                .tint(.blue)
+            }
+            
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showingRenameSheet = true
+                    } label: {
+                        Label("Rename Playlist", systemImage: "pencil")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
             }
         }
         .sheet(isPresented: $showPlaylistEditorSheet) {
             PlaylistEditorSheet(parent: node)
+        }
+        .sheet(isPresented: $showingRenameSheet) {
+            PlaylistEditorSheet(playlistToEdit: node)
         }
     }
 }
