@@ -74,13 +74,17 @@ struct PlaylistDetailView: View {
             
             
             if !node.children.isEmpty {
-                Section("playlists") {
+                Section("Playlists") {
                     ForEach(node.sortedChildren) { child in
                         NavigationLink {
                             PlaylistDetailView(node: child)
                         } label: {
-                            Label(child.name, systemImage: "music.note.list")
+                            Label(
+                                child.name,
+                                systemImage: "music.note.list"
+                            )
                         }
+                        .playlistActions(for: child)
                     }
                 }
             }

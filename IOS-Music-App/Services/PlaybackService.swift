@@ -16,53 +16,99 @@ final class PlaybackService: ObservableObject {
         node: PlaylistNode,
         traversal: PlaybackTraversal = .depthFirst
     ) async {
-        guard !isLoading else { return }
-        
+        guard !isLoading else {
+            return
+        }
+
         isLoading = true
         errorMessage = nil
         skippedTrackCount = 0
-        
-        defer { isLoading = false }
-        
+
+        defer {
+            isLoading = false
+        }
+
         do {
             try await checkPlaybackAccess()
-            
+
             let tracks = PlaylistTreeService.collectTracks(
                 from: node,
                 traversal: traversal
             )
-            
-            guard !tracks.isEmpty else { throw PlaybackError.emptyPlaylist }
-            
-            let catalogIDs: [MusicItemID] = tracks.compactMap { track in
+
+            guard !tracks.isEmpty else {
+                throw PlaybackError.emptyPlaylist
+            }
+
+            var catalogIDs: [MusicItemID] = []
+            var libraryIDs: [MusicItemID] = []
+
+            for track in tracks {
                 guard
-                    track.source == .catalog,
                     let rawID = track.musicItemID,
                     !rawID.isEmpty
                 else {
+                    continue
+                }
+
+                let id = MusicItemID(rawID)
+
+                switch track.source {
+                case .catalog:
+                    catalogIDs.append(id)
+
+                case .library:
+                    libraryIDs.append(id)
+
+                case .sample:
+                    break
+                }
+            }
+
+            guard !catalogIDs.isEmpty || !libraryIDs.isEmpty else {
+                throw PlaybackError.noSupportedTracks
+            }
+
+            let catalogSongs = try await fetchSongsByID(catalogIDs)
+            let librarySongs = try await resolveLibrarySongs(
+                for: tracks,
+                ids: libraryIDs
+            )
+
+            let orderedSongs: [Song] = tracks.compactMap { track in
+                guard let rawID = track.musicItemID else {
                     return nil
                 }
-                
-                return MusicItemID(rawID)
+
+                let id = MusicItemID(rawID)
+
+                switch track.source {
+                case .catalog:
+                    return catalogSongs[id]
+
+                case .library:
+                    return librarySongs[id]
+
+                case .sample:
+                    return nil
+                }
             }
-            
-            guard !catalogIDs.isEmpty else { throw PlaybackError.noCatalogTracks }
-            
-            let songsByID = try await fetchSongsByID(catalogIDs)
-            
-            let orderedSongs = catalogIDs.compactMap { songsByID[$0] }
-            
+
             skippedTrackCount = tracks.count - orderedSongs.count
-            
-            guard !orderedSongs.isEmpty else { throw PlaybackError.noResolvedSongs }
-            
-            player.queue = ApplicationMusicPlayer.Queue(for: orderedSongs)
-            
+
+            guard !orderedSongs.isEmpty else {
+                throw PlaybackError.noResolvedSongs
+            }
+
+            player.queue = ApplicationMusicPlayer.Queue(
+                for: orderedSongs
+            )
+
             player.state.shuffleMode = .off
             player.state.repeatMode = .none
-            
+
             try await player.play()
-            
+
             activePlaylistName = node.name
         } catch {
             errorMessage = error.localizedDescription
@@ -152,6 +198,58 @@ final class PlaybackService: ObservableObject {
         return songsByID
     }
     
+    private func fetchLibrarySongsByID(
+        _ ids: [MusicItemID]
+    ) async throws -> [MusicItemID: Song] {
+        var seen = Set<MusicItemID>()
+
+        let uniqueIDs = ids.filter { id in
+            seen.insert(id).inserted
+        }
+
+        var songsByID: [MusicItemID: Song] = [:]
+
+        let batchSize = 25
+
+        for start in stride(
+            from: 0,
+            to: uniqueIDs.count,
+            by: batchSize
+        ) {
+            let end = min(start + batchSize, uniqueIDs.count)
+            let batch = Array(uniqueIDs[start..<end])
+
+            var request = MusicLibraryRequest<Song>()
+
+            request.filter(
+                matching: \.id,
+                memberOf: batch
+            )
+
+            let response = try await request.response()
+
+            var page = response.items
+
+            for song in page {
+                songsByID[song.id] = song
+            }
+
+            while page.hasNextBatch {
+                guard let next = try await page.nextBatch() else {
+                    break
+                }
+
+                for song in next {
+                    songsByID[song.id] = song
+                }
+
+                page = next
+            }
+        }
+
+        return songsByID
+    }
+    
     func skipToNext() async {
         guard !isLoading else {
             return
@@ -179,31 +277,127 @@ final class PlaybackService: ObservableObject {
             errorMessage = error.localizedDescription
         }
     }
+    
+    private func resolveLibrarySongs(
+        for tracks: [PlaylistTrack],
+        ids: [MusicItemID]
+    ) async throws -> [MusicItemID: Song] {
+        guard !ids.isEmpty else {
+            return [:]
+        }
+
+        var songsByID = try await fetchLibrarySongsByID(ids)
+
+        let wantedIDs = Set(ids)
+
+        guard !wantedIDs.isSubset(of: Set(songsByID.keys)) else {
+            return songsByID
+        }
+
+        let sourcePlaylistIDs = Set(
+            tracks.compactMap { track -> String? in
+                guard track.source == .library else {
+                    return nil
+                }
+
+                return track.playlist?.appleMusicPlaylistID
+            }
+        )
+
+        for rawPlaylistID in sourcePlaylistIDs {
+            var request = MusicLibraryRequest<Playlist>()
+
+            request.filter(
+                matching: \.id,
+                equalTo: MusicItemID(rawPlaylistID)
+            )
+
+            let response = try await request.response()
+
+            guard let sourcePlaylist = response.items.first else {
+                print("Source playlist not found:", rawPlaylistID)
+                continue
+            }
+
+            let detailedPlaylist = try await sourcePlaylist.with(
+                [.tracks],
+                preferredSource: .library
+            )
+
+            guard var page = detailedPlaylist.tracks else {
+                print("Source playlist has no loaded tracks:", rawPlaylistID)
+                continue
+            }
+
+            while true {
+                for item in page {
+                    guard case let .song(song) = item else {
+                        continue
+                    }
+
+                    if wantedIDs.contains(song.id) {
+                        songsByID[song.id] = song
+                    }
+                }
+
+                guard
+                    page.hasNextBatch,
+                    let nextPage = try await page.nextBatch()
+                else {
+                    break
+                }
+
+                page = nextPage
+            }
+        }
+
+        print(
+            "Library resolution:",
+            songsByID.count,
+            "matched songs for",
+            wantedIDs.count,
+            "unique saved IDs"
+        )
+
+        return songsByID
+    }
 }
 
 private enum PlaybackError: LocalizedError {
     case permissionRequired
     case subscriptionRequired
     case emptyPlaylist
-    case noCatalogTracks
+    case noSupportedTracks
     case noResolvedSongs
-    
+
     var errorDescription: String? {
         switch self {
         case .permissionRequired:
-            return "Allow this app to access Apple Music in Settings before starting playback."
-            
+            return """
+            Allow this app to access Apple Music in Settings \
+            before starting playback.
+            """
+
         case .subscriptionRequired:
-            return "An Apple Music subscription with catalogue playback access is required to play these songs."
-        
+            return """
+            This version of the app requires Apple Music \
+            catalogue playback access.
+            """
+
         case .emptyPlaylist:
             return "This playlist and its children contain no songs."
-            
-        case .noCatalogTracks:
-            return "This playlist contains no supported Apple Music songs."
-            
+
+        case .noSupportedTracks:
+            return """
+            This playlist contains no supported music references. \
+            Sample tracks cannot be played.
+            """
+
         case .noResolvedSongs:
-            return "None of the saved songs could be found in the Apple Music catalogue."
+            return """
+            None of the saved songs could be resolved from \
+            Apple Music or your music library.
+            """
         }
     }
 }

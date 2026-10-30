@@ -11,6 +11,7 @@ struct LibraryView: View {
     private var rootNodes: [PlaylistNode]
 
     @State private var showingSettings = false
+    @State private var showingImportSheet = false
 
     var body: some View {
         NavigationStack {
@@ -23,6 +24,7 @@ struct LibraryView: View {
                         systemImage: "music.note.list"
                     )
                 }
+                .playlistActions(for: node)
             }
             .navigationTitle("Your library")
             .toolbar {
@@ -36,6 +38,17 @@ struct LibraryView: View {
                         )
                     }
                 }
+                
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingImportSheet = true
+                    } label: {
+                        Label(
+                            "Import Playlists",
+                            systemImage: "square.and.arrow.down"
+                        )
+                    }
+                }
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -43,6 +56,9 @@ struct LibraryView: View {
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
+        }
+        .sheet(isPresented: $showingImportSheet) {
+            ImportPlaylistsSheet()
         }
     }
 }

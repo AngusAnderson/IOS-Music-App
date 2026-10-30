@@ -8,6 +8,7 @@ final class PlaylistNode {
     var name: String
     var sortIndex: Int
     var createdAt: Date
+    var appleMusicPlaylistID: String? = nil
     
     var parent: PlaylistNode?
     
