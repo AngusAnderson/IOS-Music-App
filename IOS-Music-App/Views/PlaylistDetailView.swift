@@ -10,11 +10,17 @@ struct PlaylistDetailView: View {
     
     @EnvironmentObject private var playback: PlaybackService
     
+    @AppStorage(PlaybackTraversal.storageKey)
+    private var selectedTraversal: PlaybackTraversal = .depthFirst
+    
     var body: some View {
         
         List {
             Button("Preview Queue") {
-                let tracks = PlaylistTreeService.collectTracks(from: node)
+                let tracks = PlaylistTreeService.collectTracks(
+                    from: node,
+                    traversal: selectedTraversal
+                )
                 
                 for (index, track) in tracks.enumerated() {
                     print("\(index + 1). \(track.title)")
@@ -23,8 +29,10 @@ struct PlaylistDetailView: View {
             
             Section("Playback") {
                 Button {
+                    let traversal = selectedTraversal
+                    
                     Task {
-                        await playback.play(node: node)
+                        await playback.play(node: node, traversal: traversal)
                     }
                 } label: {
                     Label("Play this playlist", systemImage: "play.fill")
