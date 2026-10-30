@@ -15,16 +15,42 @@ struct LibraryView: View {
 
     var body: some View {
         NavigationStack {
-            List(rootNodes) { node in
-                NavigationLink {
-                    PlaylistDetailView(node: node)
-                } label: {
-                    Label(
-                        node.name,
-                        systemImage: "music.note.list"
-                    )
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    ForEach(rootNodes) { node in
+                        NavigationLink {
+                            PlaylistDetailView(node: node)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "folder.fill")
+                                    .foregroundStyle(.tint)
+
+                                Text(node.name)
+                                    .foregroundStyle(.primary)
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding()
+                            .frame(
+                                maxWidth: .infinity,
+                                alignment: .leading
+                            )
+                            .background(
+                                Color.secondary.opacity(0.08),
+                                in: RoundedRectangle(cornerRadius: 12)
+                            )
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .playlistDragAndDrop(for: node)
+                        .playlistActions(for: node)
+                    }
                 }
-                .playlistActions(for: node)
+                .padding()
             }
             .navigationTitle("Your library")
             .toolbar {
