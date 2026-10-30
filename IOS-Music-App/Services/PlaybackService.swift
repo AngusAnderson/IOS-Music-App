@@ -12,7 +12,10 @@ final class PlaybackService: ObservableObject {
     
     let player = ApplicationMusicPlayer.shared
     
-    func play(node: PlaylistNode) async {
+    func play(
+        node: PlaylistNode,
+        traversal: PlaybackTraversal = .depthFirst
+    ) async {
         guard !isLoading else { return }
         
         isLoading = true
@@ -24,7 +27,10 @@ final class PlaybackService: ObservableObject {
         do {
             try await checkPlaybackAccess()
             
-            let tracks = PlaylistTreeService.collectTracks(from: node)
+            let tracks = PlaylistTreeService.collectTracks(
+                from: node,
+                traversal: traversal
+            )
             
             guard !tracks.isEmpty else { throw PlaybackError.emptyPlaylist }
             
