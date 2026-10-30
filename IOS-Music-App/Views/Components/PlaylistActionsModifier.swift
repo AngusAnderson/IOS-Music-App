@@ -3,20 +3,73 @@ import SwiftData
 
 private struct PlaylistActionsModifier: ViewModifier {
     @Environment(\.modelContext) private var modelContext
+    
+    @Query(sort: \PlaylistNode.sortIndex)
+    private var allNodes: [PlaylistNode]
 
     let node: PlaylistNode
 
     @State private var showingMoveSheet = false
     @State private var showingDeleteConfirmation = false
     @State private var errorMessage: String?
+    
+    private var siblings: [PlaylistNode] {
+        allNodes
+            .filter { candidate in
+                candidate.parent?.id == node.parent?.id
+            }
+            .sorted { first, second in
+                if first.sortIndex != second.sortIndex {
+                    return first.sortIndex < second.sortIndex
+                }
+
+                return first.id.uuidString < second.id.uuidString
+            }
+    }
+
+    private var currentSiblingIndex: Int? {
+        siblings.firstIndex { $0.id == node.id }
+    }
+
+    private var canMoveUp: Bool {
+        guard let index = currentSiblingIndex else {
+            return false
+        }
+
+        return index > 0
+    }
+
+    private var canMoveDown: Bool {
+        guard let index = currentSiblingIndex else {
+            return false
+        }
+
+        return index < siblings.count - 1
+    }
 
     func body(content: Content) -> some View {
         content
             .contextMenu {
                 Button {
+                    reorder(.up)
+                } label: {
+                    Label("Move Up", systemImage: "arrow.up")
+                }
+                .disabled(!canMoveUp)
+
+                Button {
+                    reorder(.down)
+                } label: {
+                    Label("Move Down", systemImage: "arrow.down")
+                }
+                .disabled(!canMoveDown)
+
+                Divider()
+
+                Button {
                     showingMoveSheet = true
                 } label: {
-                    Label("Move", systemImage: "folder")
+                    Label("Move to Folder", systemImage: "folder")
                 }
 
                 Button(role: .destructive) {
@@ -73,6 +126,20 @@ private struct PlaylistActionsModifier: ViewModifier {
                 node,
                 in: modelContext
             )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+    
+    private func reorder(_ direction: ReorderDirection) {
+        do {
+            try withAnimation {
+                try PlaylistEditingService.reorder(
+                    node,
+                    direction: direction,
+                    in: modelContext
+                )
+            }
         } catch {
             errorMessage = error.localizedDescription
         }

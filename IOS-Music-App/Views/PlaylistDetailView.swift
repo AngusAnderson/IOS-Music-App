@@ -22,9 +22,14 @@ struct PlaylistDetailView: View {
 
                 playbackSection
 
-                childPlaylistsSection
+                if !node.sortedChildren.isEmpty {
+                    childPlaylistsSection
+                }
 
-                tracksSection
+                if !node.tracks.isEmpty {
+                    tracksSection
+                }
+                
             }
             .padding()
         }
@@ -224,11 +229,12 @@ struct PlaylistDetailView: View {
                         Color.secondary.opacity(0.05),
                         in: RoundedRectangle(cornerRadius: 12)
                     )
+                    .contentShape(Rectangle())
+                    .trackActions(for: track)
                 }
             }
         }
     }
-
     // MARK: - Debug queue preview
 
     private func previewQueue() {
