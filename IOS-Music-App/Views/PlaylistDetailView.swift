@@ -8,6 +8,8 @@ struct PlaylistDetailView: View {
     @State private var showingRenameSheet = false
     @State private var showingAddSongsSheet = false
     
+    @EnvironmentObject private var playback: PlaybackService
+    
     var body: some View {
         
         List {
@@ -18,6 +20,50 @@ struct PlaylistDetailView: View {
                     print("\(index + 1). \(track.title)")
                 }
             }
+            
+            Section("Playback") {
+                Button {
+                    Task {
+                        await playback.play(node: node)
+                    }
+                } label: {
+                    Label("Play this playlist", systemImage: "play.fill")
+                }
+                .disabled(playback.isLoading)
+                
+                HStack {
+                    Button("Pause") {
+                        playback.pause()
+                    }
+                    
+                    Spacer()
+                    
+                    Button("Resume") {
+                        Task {
+                            await playback.resume()
+                        }
+                    }
+                }
+                .buttonStyle(.borderless)
+                .disabled(playback.isLoading)
+                
+                if playback.isLoading {
+                    ProgressView("Preparing Playback...")
+                }
+                
+                if let errorMessage = playback.errorMessage {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                }
+                
+                if playback.skippedTrackCount > 0 {
+                    Text("\(playback.skippedTrackCount) track(s) could not be included")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                
+            }
+            
             
             if !node.children.isEmpty {
                 Section("playlists") {

@@ -22,5 +22,8 @@ struct LibraryView: View {
             }
             .navigationTitle("Your library")
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            NowPlayingBar()
+        }
     }
 }
