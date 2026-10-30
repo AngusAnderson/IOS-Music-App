@@ -145,6 +145,34 @@ final class PlaybackService: ObservableObject {
         
         return songsByID
     }
+    
+    func skipToNext() async {
+        guard !isLoading else {
+            return
+        }
+
+        errorMessage = nil
+
+        do {
+            try await player.skipToNextEntry()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func skipToPrevious() async {
+        guard !isLoading else {
+            return
+        }
+
+        errorMessage = nil
+
+        do {
+            try await player.skipToPreviousEntry()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 }
 
 private enum PlaybackError: LocalizedError {
